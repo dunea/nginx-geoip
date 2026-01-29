@@ -1,9 +1,21 @@
+FROM nginx:1.28.0-alpine AS builder
+
+RUN apk add --no-cache git gcc musl-dev pcre-dev zlib-dev linux-headers make libmaxminddb-dev
+
+RUN git clone --depth=1 https://github.com/leev/ngx_http_geoip2_module.git /tmp/ngx_http_geoip2_module
+
+RUN wget https://nginx.org/download/nginx-1.28.0.tar.gz -O /tmp/nginx.tar.gz \
+    && tar -zx -C /tmp -f /tmp/nginx.tar.gz \
+    && cd /tmp/nginx-1.28.0 \
+    && ./configure --with-compat --add-dynamic-module=/tmp/ngx_http_geoip2_module \
+    && make modules -j$(nproc) \
+    && mkdir -p /modules \
+    && cp objs/ngx_http_geoip2_module.so /modules/
+
 FROM nginx:1.28.0-alpine
 
-# 先添加 Alpine edge/community 仓库（确保最新模块）
-RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
-    && echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
-    && apk update \
-    && apk add --no-cache nginx-mod-http-geoip2 libmaxminddb
+COPY --from=builder /modules/ngx_http_geoip2_module.so /usr/lib/nginx/modules/ngx_http_geoip2_module.so
+
+RUN apk add --no-cache libmaxminddb
 
 RUN mkdir -p /usr/share/GeoIP
